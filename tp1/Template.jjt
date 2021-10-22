@@ -77,9 +77,18 @@ MORE :
 TOKEN :
 {
 	< PRINT: "print" > |
-	< INPUT: "input" >
-
-	// À compléter au besoin
+	< INPUT: "input" > |
+	< RETURN: "return"> |
+    < WHILE: "while" > |
+    < DO: "do" > |
+    < FOR: "for" > |
+    < IF: "if" > |
+    < ELSE: "else" > |
+    < ELIF: <ELSE> <IF>>|
+    < TYPE: <FLOAT> | <INT> | <BOOL>> |
+    < #FLOAT: "float"> |
+    < #INT: "int"> |
+    < #BOOL: "bool">
 }
 
 // Operators
@@ -110,23 +119,27 @@ TOKEN :
 	< SEMICOLON: ";" > |
 	< COMMA: "," > |
 	< #AND: "&&" > |
-	< #OR: "||" >
-	// À compléter au besoin
+	< #OR: "||" > |
+	< ARROW: "->" >
 }
 
 
 // Identifiers and numbers
 TOKEN :
 {
+    < BOOLEAN: <TRUE> | <FALSE> > |
 	< IDENTIFIER: <LETTER> ( <LETTER> | <DIGIT> )* > |
 	< #LETTER: ["a"-"z","A"-"Z","_"] > |
 	< #DIGIT: ["0"-"9"] > |
 	< INTEGER: ["1"-"9"] (["0"-"9"])* | "0" > |
-	//TODO: Caution! Allows numbers such as "0000.23"... to fix!!!
-	< REAL: (<INTEGER>)+ "." (["0"-"9"])+ (<EXPONENT>)? |
-    			  (<INTEGER>)+ <EXPONENT> > |
-    < #EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+ >
+	< REAL: (<INTEGER>)? "." (["0"-"9"])* (<EXPONENT>)? |
+    			  (<INTEGER>)? <EXPONENT> > |
+    < #EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+ > |
+    < #TRUE: "true"> |
+    < #FALSE: "false">
 }
+
+
 
 //
 // SYNTAX ANALYSIS
@@ -134,10 +147,25 @@ TOKEN :
 
 
 
-// à compléter
-void Stmt() : { }
+
+
+void Stmt() #void : { }
 {
-	AssignStmt() <SEMICOLON>
+	(AssignStmt() <SEMICOLON>) |
+	LoopStmt() |
+	CondStmt()
+}
+
+void LoopStmt() #void : { }
+{
+    WhileStmt() |
+    (DoWhileStmt() <SEMICOLON>) |
+    ForStmt()
+}
+
+void CondStmt() #void : { }
+{
+    IfStmt()
 }
 
 ASTProgram Program() : { }
@@ -151,32 +179,91 @@ void Block() : { }
 }
 
 // à finir -- commencez ici!
+void WhileStmt() : { }
+{
+    <WHILE> ParenExpr() (AccBlock() | Stmt())
+}
+
+void DoWhileStmt() : { }
+{
+    <DO> AccBlock() <WHILE> ParenExpr()
+}
+
+void IfStmt() : { }
+{
+    <IF> ParenExpr() (
+        (Stmt() | AccBlock())
+        (LOOKAHEAD(2)<ELIF> ParenExpr() (Stmt() | AccBlock()))*
+        (LOOKAHEAD(2)<ELSE> (Stmt() | AccBlock()))?
+    )
+}
+
+void ForStmt() : { }
+{
+    <FOR> <LPAREN> ((AssignStmt())?)#ForInit <SEMICOLON> ((Expr())?)#ForCond <SEMICOLON> ((AssignStmt())?)#ForStep <RPAREN> (AccBlock() | Stmt())
+}
+
+void LambdaStmt() : { }
+{
+    <LPAREN> (Parameter() (<COMMA> Parameter())*)? <RPAREN> <ARROW>
+    ((<LACC> (Block())? (<RETURN> Expr() <SEMICOLON>)? <RACC>) |
+        Stmt() |
+        <RETURN> Expr() <SEMICOLON>)
+}
+
+void ParenExpr() : { }
+{
+    <LPAREN> Expr() <RPAREN>
+}
+
+void AccBlock() #void : { }
+{
+    <LACC> Block() <RACC>
+}
+
 void AssignStmt() : { }
 {
-    Identifier()
+    Identifier() <ASSIGN> (LOOKAHEAD(2)  Expr() | LambdaStmt())
 }
 
-void Expr() : {}
+void Expr() #void : {}
 {
-    IntExpr()
+    LogicExpr()
 }
 
-void IntExpr() : { }
+void LogicExpr() #void : { }
 {
-    IntLogicExpr()
+    (CompExpr() (<LOGIC> CompExpr())*)#LogicExpr(>1)
 }
 
-void IntLogicExpr() : { }
+void CompExpr() #void : { }
 {
-    IntBasicExpr() (LOOKAHEAD(2)
-         <LOGIC> IntBasicExpr()
-    )*
+    (AddExpr() (<COMPARE> AddExpr())*)#CompareExpr(>1)
 }
 
-void IntBasicExpr() : { }
+void AddExpr() #void : { }
 {
-	Identifier() |
-	IntValue()
+    (MultExpr() ((<PLUS>|<MINUS>) MultExpr())*)#AddExpr(>1)
+}
+
+void MultExpr() #void : { }
+{
+    (NegExpr() ((<FOIS>|<DIV>) NegExpr())*)#MultExpr(>1)
+}
+
+void NegExpr() #void: { }
+{
+    ((Minus())* NotExpr())
+}
+
+void NotExpr() #void: { }
+{
+    ((Not())* (ParenExpr() | BasicExpr()))
+}
+
+void BasicExpr() #void: { }
+{
+    Identifier() | IntValue() | RealValue() | BoolValue()
 }
 
 void Identifier() : { }
@@ -187,4 +274,29 @@ void Identifier() : { }
 void IntValue() : { }
 {
 	<INTEGER>
+}
+
+void RealValue() : { }
+{
+	<REAL>
+}
+
+void BoolValue() : { }
+{
+	<BOOLEAN>
+}
+
+void Parameter() : { }
+{
+    <TYPE><IDENTIFIER>
+}
+
+void Minus() : {}
+{
+    <MINUS>
+}
+
+void Not() : {}
+{
+    <NOT>
 }
